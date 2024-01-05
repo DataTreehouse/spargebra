@@ -17,9 +17,17 @@ pub struct DataTreehousePattern {
 }
 
 impl DataTreehousePattern {
-    pub fn union(mut self, other:Self) -> Self {
+    pub fn union(mut self, other: Self) -> Self {
         let DataTreehousePattern {
-            timeseries, labels, values, timestamp, from, to, aggregation, filter, interval
+            timeseries,
+            labels,
+            values,
+            timestamp,
+            from,
+            to,
+            aggregation,
+            filter,
+            interval,
         } = other;
         if let Some(timeseries) = timeseries {
             self.timeseries = Some(timeseries);
@@ -67,14 +75,14 @@ impl Display for DataTreehousePattern {
         writeln!(f, "DT(").unwrap();
         if let Some(labels) = &self.labels {
             write!(f, "labels=(").unwrap();
-            for (ts,label) in labels {
+            for (ts, label) in labels {
                 write!(f, "({}:{}), ", ts, label).unwrap();
             }
             writeln!(f, "),").unwrap();
         }
         if let Some(values) = &self.values {
             write!(f, "values=(").unwrap();
-            for (ts,val) in values {
+            for (ts, val) in values {
                 write!(f, "({}={}), ", ts, val).unwrap();
             }
             writeln!(f, "),").unwrap();
@@ -167,11 +175,21 @@ pub enum AggregationOperation {
 
 impl Display for AggregationOperation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            AggregationOperation::Avg => {"avg"}
-            AggregationOperation::Min => {"min"}
-            AggregationOperation::Max => {"max"}
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                AggregationOperation::Avg => {
+                    "avg"
+                }
+                AggregationOperation::Min => {
+                    "min"
+                }
+                AggregationOperation::Max => {
+                    "max"
+                }
+            }
+        )
     }
 }
 #[derive(Eq, PartialEq, Debug, Clone, Hash)]
@@ -182,9 +200,17 @@ pub enum TimestampBinaryOperator {
 
 impl Display for TimestampBinaryOperator {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            TimestampBinaryOperator::Plus => {"+"}
-            TimestampBinaryOperator::Minus => {"-"}
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                TimestampBinaryOperator::Plus => {
+                    "+"
+                }
+                TimestampBinaryOperator::Minus => {
+                    "-"
+                }
+            }
+        )
     }
 }

@@ -1,9 +1,9 @@
 //! [SPARQL 1.1 Query Algebra](https://www.w3.org/TR/sparql11-query/#sparqlQuery) representation.
 
 use crate::term::*;
+use crate::treehouse::DataTreehousePattern;
 use oxrdf::LiteralRef;
 use std::fmt;
-use crate::treehouse::DataTreehousePattern;
 
 /// A [property path expression](https://www.w3.org/TR/sparql11-query/#defn_PropertyPathExpr).
 #[derive(Eq, PartialEq, Debug, Clone, Hash)]
@@ -591,9 +591,7 @@ pub enum GraphPattern {
         silent: bool,
     },
     /// [Data Treehouse](https://www.data-treehouse.com/)
-    DT {
-        dt: DataTreehousePattern
-    }
+    DT { dt: DataTreehousePattern },
 }
 
 impl fmt::Display for GraphPattern {

@@ -8,8 +8,10 @@ pub mod algebra;
 mod parser;
 mod query;
 pub mod term;
-mod update;
 pub mod treehouse;
+mod update;
+mod remove_sugar;
+mod query_context;
 
 pub use parser::ParseError;
 pub use query::*;

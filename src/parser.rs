@@ -1,7 +1,14 @@
 use crate::algebra::*;
 use crate::query::*;
 use crate::term::*;
+use crate::treehouse::{
+    AggregationOperation, DataTreehousePattern, SimpleTimestampExpression, TimestampBinaryOperator,
+    TimestampExpression,
+};
 use crate::update::*;
+use chrono::Duration;
+use datetimeparse::parse_rfc3339_datetime;
+use fundu::{DurationParser, SaturatingInto};
 use oxilangtag::LanguageTag;
 use oxiri::{Iri, IriParseError};
 use oxrdf::vocab::{rdf, xsd};
@@ -15,10 +22,7 @@ use std::mem::take;
 use std::str::Chars;
 use std::str::FromStr;
 use std::{char, fmt};
-use crate::treehouse::{DataTreehousePattern, TimestampExpression, TimestampBinaryOperator, SimpleTimestampExpression, AggregationOperation};
-use chrono::Duration;
-use datetimeparse::parse_rfc3339_datetime;
-use fundu::{DurationParser, SaturatingInto};
+use crate::remove_sugar::SyntacticSugarRemover;
 
 /// Parses a SPARQL query with an optional base IRI to resolve relative IRIs in the query.
 pub fn parse_query(query: &str, base_iri: Option<&str>) -> Result<Query, ParseError> {
@@ -36,9 +40,13 @@ pub fn parse_query(query: &str, base_iri: Option<&str>) -> Result<Query, ParseEr
         aggregates: Vec::new(),
     };
 
-    parser::QueryUnit(&unescape_unicode_codepoints(query), &mut state).map_err(|e| ParseError {
+    let mut parsed = parser::QueryUnit(&unescape_unicode_codepoints(query), &mut state).map_err(|e| ParseError {
         inner: ParseErrorKind::Parser(e),
-    })
+    })?;
+    let remover = SyntacticSugarRemover::new();
+    parsed = remover.remove_sugar(parsed);
+    Ok(parsed)
+
 }
 
 /// Parses a SPARQL update with an optional base IRI to resolve relative IRIs in the query.
@@ -1522,7 +1530,7 @@ parser! {
         rule DTLabel() -> (Variable, Literal) = "(" _ v:Var() _ "=" _ l:RDFLiteral() _ ")"{
             (v,l)
         }
-        
+
         rule DTValues() -> DataTreehousePattern = i("values") _ i("=") _ values:DTValue() **<1,> ("," _) ","? {
             DataTreehousePattern {values:Some(values), .. Default::default()}
         }
@@ -1547,7 +1555,7 @@ parser! {
         rule DTTimestampExpressionFrom() -> DataTreehousePattern = i("from") _ "=" _ from:DTTimestampExpression() _ ","? {
             DataTreehousePattern {from:Some(from), .. Default::default()}
         }
-        
+
          rule DTTimestampExpressionTo() -> DataTreehousePattern = i("to") _ "=" _ to:DTTimestampExpression() _ ","? {
             DataTreehousePattern {to:Some(to), .. Default::default()}
         }
