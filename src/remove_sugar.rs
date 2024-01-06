@@ -81,55 +81,6 @@ impl SyntacticSugarRemover {
                 let mut left_gp = left.gp.take().unwrap();
                 let mut right_gp = right.gp.take().unwrap();
 
-                if (left.has_sugar_context(&left_context)
-                    || right.has_sugar_context(&right_context))
-                    && is_bgp(&left_gp)
-                    && is_bgp(&right_gp)
-                {
-                    if let (
-                        GraphPattern::Bgp {
-                            patterns: left_patterns,
-                        },
-                        GraphPattern::Bgp {
-                            patterns: right_patterns,
-                        },
-                    ) = (left_gp, right_gp)
-                    {
-                        let mut patterns = left_patterns;
-                        patterns.extend(right_patterns);
-                        let mut gp = GraphPattern::Bgp { patterns };
-                        let expr = conjunction(left.filter_expr.take(), right.filter_expr.take());
-
-                        if let Some(expr) = expr {
-                            gp = GraphPattern::Filter {
-                                inner: Box::new(gp),
-                                expr,
-                            }
-                        }
-                        if let Some((variable, expression)) = left.binding.take() {
-                            gp = GraphPattern::Extend {
-                                inner: Box::new(gp),
-                                variable,
-                                expression,
-                            }
-                        }
-                        if let Some((variable, expression)) = right.binding.take() {
-                            gp = GraphPattern::Extend {
-                                inner: Box::new(gp),
-                                variable,
-                                expression,
-                            }
-                        }
-
-                        let mut ret = RemoveSugarGraphPatternReturn::from_pattern(gp);
-                        ret.projections_from(&mut left);
-                        ret.projections_from(&mut right);
-                        return ret;
-                    } else {
-                        panic!()
-                    }
-                }
-
                 if left.has_sugar_context(&left_context) {
                     left_gp = add_filter_and_bindings(
                         left_gp,
@@ -725,26 +676,6 @@ fn find_final_timeseries_tp(
     }
 }
 
-fn is_bgp(gp: &GraphPattern) -> bool {
-    if let GraphPattern::Bgp { .. } = gp {
-        true
-    } else {
-        false
-    }
-}
-
-fn conjunction(e1: Option<Expression>, e2: Option<Expression>) -> Option<Expression> {
-    if let Some(e1) = e1 {
-        if let Some(e2) = e2 {
-            Some(Expression::And(Box::new(e1), Box::new(e2)))
-        } else {
-            Some(e1)
-        }
-    } else {
-        e2
-    }
-}
-
 fn dt_to_ret(
     dt: DataTreehousePattern,
     ts_tps_in_scope: Vec<TermPattern>,
@@ -1133,3 +1064,4 @@ impl RemoveSugarGraphPatternReturn {
         self.vars_to_group_by.extend(p.vars_to_group_by.drain(..));
     }
 }
+
