@@ -1,5 +1,6 @@
 use crate::algebra::*;
 use crate::query::*;
+use crate::remove_sugar::SyntacticSugarRemover;
 use crate::term::*;
 use crate::treehouse::{
     AggregationOperation, DataTreehousePattern, SimpleTimestampExpression, TimestampBinaryOperator,
@@ -22,7 +23,6 @@ use std::mem::take;
 use std::str::Chars;
 use std::str::FromStr;
 use std::{char, fmt};
-use crate::remove_sugar::SyntacticSugarRemover;
 
 /// Parses a SPARQL query with an optional base IRI to resolve relative IRIs in the query.
 pub fn parse_query(query: &str, base_iri: Option<&str>) -> Result<Query, ParseError> {
@@ -40,13 +40,15 @@ pub fn parse_query(query: &str, base_iri: Option<&str>) -> Result<Query, ParseEr
         aggregates: Vec::new(),
     };
 
-    let mut parsed = parser::QueryUnit(&unescape_unicode_codepoints(query), &mut state).map_err(|e| ParseError {
-        inner: ParseErrorKind::Parser(e),
-    })?;
+    let mut parsed =
+        parser::QueryUnit(&unescape_unicode_codepoints(query), &mut state).map_err(|e| {
+            ParseError {
+                inner: ParseErrorKind::Parser(e),
+            }
+        })?;
     let remover = SyntacticSugarRemover::new();
     parsed = remover.remove_sugar(parsed);
     Ok(parsed)
-
 }
 
 /// Parses a SPARQL update with an optional base IRI to resolve relative IRIs in the query.
@@ -1527,7 +1529,7 @@ parser! {
             DataTreehousePattern {labels:Some(labels), .. Default::default()}
         }
 
-        rule DTLabel() -> (Variable, Literal) = "(" _ v:Var() _ "=" _ l:RDFLiteral() _ ")"{
+        rule DTLabel() -> (Variable, Literal) = "(" _ v:Var() _ ":" _ l:RDFLiteral() _ ")"{
             (v,l)
         }
 
@@ -1588,7 +1590,7 @@ parser! {
             Ok(parser.parse(&s).map_err(|_|"Duration parsing failed")?.saturating_into())
         }
 
-        rule DTAggregation() -> DataTreehousePattern = i("aggregation") _ "=" _ a:DTAggregationOperation() _ ","? {
+        rule DTAggregation() -> DataTreehousePattern = i("aggregation") _ "=" _ "\"" a:DTAggregationOperation() "\"" _ ","? {
             DataTreehousePattern {aggregation:Some(a), .. Default::default()}
         }
 

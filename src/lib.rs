@@ -7,11 +7,11 @@
 pub mod algebra;
 mod parser;
 mod query;
+mod query_context;
+mod remove_sugar;
 pub mod term;
 pub mod treehouse;
 mod update;
-mod remove_sugar;
-mod query_context;
 
 pub use parser::ParseError;
 pub use query::*;

@@ -10,20 +10,20 @@ const TIMESTAMP_VARIABLE_NAME: &str = "timestamp";
 pub const FLOOR_DATETIME_TO_SECONDS_INTERVAL: &str =
     "https://github.com/DataTreehouse/chrontext#FloorDateTimeToSecondsInterval";
 
-use crate::query_context::{Context, PathEntry};
-use chrono::{DateTime, Utc};
-use oxrdf::vocab::{rdfs, xsd};
-use oxrdf::{Literal, NamedNode};
 use crate::algebra::{
     AggregateExpression, Expression, Function, GraphPattern, OrderExpression,
     PropertyPathExpression,
 };
+use crate::query_context::{Context, PathEntry};
 use crate::term::{NamedNodePattern, TermPattern, TriplePattern, Variable};
 use crate::treehouse::{
     AggregationOperation, DataTreehousePattern, SimpleTimestampExpression, TimestampBinaryOperator,
     TimestampExpression,
 };
 use crate::Query;
+use chrono::{DateTime, Utc};
+use oxrdf::vocab::{rdfs, xsd};
+use oxrdf::{Literal, NamedNode};
 
 pub struct SyntacticSugarRemover {}
 
@@ -61,10 +61,7 @@ impl SyntacticSugarRemover {
             GraphPattern::Bgp { .. } | GraphPattern::Path { .. } => {
                 RemoveSugarGraphPatternReturn::from_pattern(graph_pattern)
             }
-            GraphPattern::Join {
-                left,
-                right,
-            } => {
+            GraphPattern::Join { left, right } => {
                 if contains_sugar(&left) && !contains_sugar(&right) {
                     ts_tps_in_scope.extend(find_ts_term_pattens_in_scope(&right))
                 }
@@ -101,8 +98,7 @@ impl SyntacticSugarRemover {
                         let mut patterns = left_patterns;
                         patterns.extend(right_patterns);
                         let mut gp = GraphPattern::Bgp { patterns };
-                        let expr =
-                            conjunction(left.filter_expr.take(), right.filter_expr.take());
+                        let expr = conjunction(left.filter_expr.take(), right.filter_expr.take());
 
                         if let Some(expr) = expr {
                             gp = GraphPattern::Filter {
@@ -325,11 +321,28 @@ impl SyntacticSugarRemover {
                 if !inner.vars_to_group_by.is_empty() {
                     let mut group_by_vars: Vec<_> = inner.vars_to_group_by.drain(..).collect();
                     group_by_vars.extend(variables.clone());
+                    let order_expr = if is_order_by(&gp) {
+                        if let GraphPattern::OrderBy { inner, expression } = gp {
+                            gp = *inner;
+                            Some(expression)
+                        } else {
+                            panic!()
+                        }
+                    } else {
+                        None
+                    };
+
                     gp = GraphPattern::Group {
                         inner: Box::new(gp),
                         variables: group_by_vars,
                         aggregates: inner.aggregations.drain(..).collect(),
                     };
+                    if let Some(order_expr) = order_expr {
+                        gp = GraphPattern::OrderBy {
+                            inner: Box::new(gp),
+                            expression: order_expr,
+                        };
+                    }
                 }
 
                 for v in inner.vars_to_project.drain(..) {
@@ -601,6 +614,14 @@ impl SyntacticSugarRemover {
     }
 }
 
+fn is_order_by(gp: &GraphPattern) -> bool {
+    if let GraphPattern::OrderBy { .. } = gp {
+        true
+    } else {
+        false
+    }
+}
+
 fn add_filter_and_bindings(
     mut gp: GraphPattern,
     expr: Option<Expression>,
@@ -864,7 +885,8 @@ fn dt_to_ret(
         };
     }
 
-    if let Some(filter) = filter {
+    if let Some(mut filter) = filter {
+        filter = rewrite_timestamp_variable(filter, &timestamp, &inner_timestamp);
         expr = if let Some(expr) = expr {
             Some(Expression::And(Box::new(expr), Box::new(filter)))
         } else {
@@ -920,6 +942,113 @@ fn dt_to_ret(
         vars_to_group_by,
         vars_to_project,
         context: Some(context.clone()),
+    }
+}
+
+fn rewrite_timestamp_variable(e: Expression, outer: &Variable, inner: &Variable) -> Expression {
+    match e {
+        Expression::NamedNode(..) | Expression::Literal(..) => e,
+        Expression::Variable(v) => {
+            if &v == outer {
+                Expression::Variable(inner.clone())
+            } else {
+                Expression::Variable(v)
+            }
+        }
+        Expression::Or(a, b) => Expression::Or(
+            Box::new(rewrite_timestamp_variable(*a, outer, inner)),
+            Box::new(rewrite_timestamp_variable(*b, outer, inner)),
+        ),
+        Expression::And(a, b) => Expression::And(
+            Box::new(rewrite_timestamp_variable(*a, outer, inner)),
+            Box::new(rewrite_timestamp_variable(*b, outer, inner)),
+        ),
+        Expression::Equal(a, b) => Expression::Equal(
+            Box::new(rewrite_timestamp_variable(*a, outer, inner)),
+            Box::new(rewrite_timestamp_variable(*b, outer, inner)),
+        ),
+        Expression::SameTerm(a, b) => Expression::SameTerm(
+            Box::new(rewrite_timestamp_variable(*a, outer, inner)),
+            Box::new(rewrite_timestamp_variable(*b, outer, inner)),
+        ),
+        Expression::Greater(a, b) => Expression::Greater(
+            Box::new(rewrite_timestamp_variable(*a, outer, inner)),
+            Box::new(rewrite_timestamp_variable(*b, outer, inner)),
+        ),
+        Expression::GreaterOrEqual(a, b) => Expression::GreaterOrEqual(
+            Box::new(rewrite_timestamp_variable(*a, outer, inner)),
+            Box::new(rewrite_timestamp_variable(*b, outer, inner)),
+        ),
+        Expression::Less(a, b) => Expression::Less(
+            Box::new(rewrite_timestamp_variable(*a, outer, inner)),
+            Box::new(rewrite_timestamp_variable(*b, outer, inner)),
+        ),
+        Expression::LessOrEqual(a, b) => Expression::LessOrEqual(
+            Box::new(rewrite_timestamp_variable(*a, outer, inner)),
+            Box::new(rewrite_timestamp_variable(*b, outer, inner)),
+        ),
+        Expression::In(a, bs) => {
+            let bs = bs
+                .into_iter()
+                .map(|b| rewrite_timestamp_variable(b, outer, inner))
+                .collect();
+            Expression::In(Box::new(rewrite_timestamp_variable(*a, outer, inner)), bs)
+        }
+        Expression::Add(a, b) => Expression::Add(
+            Box::new(rewrite_timestamp_variable(*a, outer, inner)),
+            Box::new(rewrite_timestamp_variable(*b, outer, inner)),
+        ),
+        Expression::Subtract(a, b) => Expression::Subtract(
+            Box::new(rewrite_timestamp_variable(*a, outer, inner)),
+            Box::new(rewrite_timestamp_variable(*b, outer, inner)),
+        ),
+        Expression::Multiply(a, b) => Expression::Multiply(
+            Box::new(rewrite_timestamp_variable(*a, outer, inner)),
+            Box::new(rewrite_timestamp_variable(*b, outer, inner)),
+        ),
+        Expression::Divide(a, b) => Expression::Divide(
+            Box::new(rewrite_timestamp_variable(*a, outer, inner)),
+            Box::new(rewrite_timestamp_variable(*b, outer, inner)),
+        ),
+        Expression::UnaryPlus(a) => {
+            Expression::UnaryPlus(Box::new(rewrite_timestamp_variable(*a, outer, inner)))
+        }
+        Expression::UnaryMinus(a) => {
+            Expression::UnaryMinus(Box::new(rewrite_timestamp_variable(*a, outer, inner)))
+        }
+        Expression::Not(a) => {
+            Expression::Not(Box::new(rewrite_timestamp_variable(*a, outer, inner)))
+        }
+        Expression::Exists(b) => {
+            Expression::Exists(b)
+            //Todo:fix properly
+        }
+        Expression::Bound(a) => {
+            if &a == outer {
+                Expression::Bound(inner.clone())
+            } else {
+                Expression::Bound(a)
+            }
+        }
+        Expression::If(a, b, c) => Expression::If(
+            Box::new(rewrite_timestamp_variable(*a, outer, inner)),
+            Box::new(rewrite_timestamp_variable(*b, outer, inner)),
+            Box::new(rewrite_timestamp_variable(*c, outer, inner)),
+        ),
+        Expression::Coalesce(a) => {
+            let a = a
+                .into_iter()
+                .map(|a| rewrite_timestamp_variable(a, outer, inner))
+                .collect();
+            Expression::Coalesce(a)
+        }
+        Expression::FunctionCall(f, a) => {
+            let a = a
+                .into_iter()
+                .map(|a| rewrite_timestamp_variable(a, outer, inner))
+                .collect();
+            Expression::FunctionCall(f, a)
+        }
     }
 }
 
