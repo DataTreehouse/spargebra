@@ -32,22 +32,22 @@ impl SyntacticSugarRemover {
         SyntacticSugarRemover {}
     }
 
-    pub fn remove_sugar(&self, select_query: Query) -> Query {
-        if let Query::Select {
-            dataset,
-            pattern,
-            base_iri,
-        } = select_query
-        {
-            let gp = self.remove_sugar_from_graph_pattern(pattern, vec![], &Context::new());
-            let new_query = Query::Select {
+    pub fn remove_sugar(&self, query: Query) -> Query {
+        match query {
+            Query::Select {
                 dataset,
-                pattern: gp.gp.unwrap(),
+                pattern,
                 base_iri,
-            };
-            new_query
-        } else {
-            panic!("Should only be called with Select")
+            } => {
+                let gp = self.remove_sugar_from_graph_pattern(pattern, vec![], &Context::new());
+                let new_query = Query::Select {
+                    dataset,
+                    pattern: gp.gp.unwrap(),
+                    base_iri,
+                };
+                new_query
+            }
+            q => q,
         }
     }
 
@@ -1064,4 +1064,3 @@ impl RemoveSugarGraphPatternReturn {
         self.vars_to_group_by.extend(p.vars_to_group_by.drain(..));
     }
 }
-
