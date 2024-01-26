@@ -462,6 +462,7 @@ fn build_select(
     order_by: Option<Vec<OrderExpression>>,
     offset_limit: Option<(usize, Option<usize>)>,
     values: Option<GraphPattern>,
+    pvalues: Option<GraphPattern>,
     state: &mut ParserState,
 ) -> Result<GraphPattern, &'static str> {
     let mut p = r#where;
@@ -499,6 +500,11 @@ fn build_select(
 
     //VALUES
     if let Some(data) = values {
+        p = new_join(p, data);
+    }
+
+    //PVALUES
+    if let Some(data) = pvalues {
         p = new_join(p, data);
     }
 
@@ -990,16 +996,16 @@ parser! {
             state.namespaces.insert(ns.into(), i.into_inner());
         }
 
-        rule SelectQuery() -> Query = s:SelectClause() _ d:DatasetClauses() _ w:WhereClause() _ g:GroupClause()? _ h:HavingClause()? _ o:OrderClause()? _ l:LimitOffsetClauses()? _ v:ValuesClause() {?
+        rule SelectQuery() -> Query = s:SelectClause() _ d:DatasetClauses() _ w:WhereClause() _ g:GroupClause()? _ h:HavingClause()? _ o:OrderClause()? _ l:LimitOffsetClauses()? _ v:ValuesClause() _ p:PValuesClause() {?
             Ok(Query::Select {
                 dataset: d,
-                pattern: build_select(s, w, g, h, o, l, v, state)?,
+                pattern: build_select(s, w, g, h, o, l, v, p, state)?,
                 base_iri: state.base_iri.clone()
             })
         }
 
-        rule SubSelect() -> GraphPattern = s:SelectClause() _ w:WhereClause() _ g:GroupClause()? _ h:HavingClause()? _ o:OrderClause()? _ l:LimitOffsetClauses()? _ v:ValuesClause() {?
-            build_select(s, w, g, h, o, l, v, state)
+        rule SubSelect() -> GraphPattern = s:SelectClause() _ w:WhereClause() _ g:GroupClause()? _ h:HavingClause()? _ o:OrderClause()? _ l:LimitOffsetClauses()? _ v:ValuesClause() _ p:PValuesClause() {?
+            build_select(s, w, g, h, o, l, v, p, state)
         }
 
         rule SelectClause() -> Selection = i("SELECT") _ Selection_init() o:SelectClause_option() _ v:SelectClause_variables() {
@@ -1023,22 +1029,22 @@ parser! {
             "(" _ e:Expression() _ i("AS") _ v:Var() _ ")" _ { SelectionMember::Expression(e, v) }
 
         rule ConstructQuery() -> Query =
-            i("CONSTRUCT") _ c:ConstructTemplate() _ d:DatasetClauses() _ w:WhereClause() _ g:GroupClause()? _ h:HavingClause()? _ o:OrderClause()? _ l:LimitOffsetClauses()? _ v:ValuesClause() {?
+            i("CONSTRUCT") _ c:ConstructTemplate() _ d:DatasetClauses() _ w:WhereClause() _ g:GroupClause()? _ h:HavingClause()? _ o:OrderClause()? _ l:LimitOffsetClauses()? _ v:ValuesClause() _ p:PValuesClause() {?
                 Ok(Query::Construct {
                     template: c,
                     dataset: d,
-                    pattern: build_select(Selection::no_op(), w, g, h, o, l, v, state)?,
+                    pattern: build_select(Selection::no_op(), w, g, h, o, l, v, p, state)?,
                     base_iri: state.base_iri.clone()
                 })
             } /
-            i("CONSTRUCT") _ d:DatasetClauses() _ i("WHERE") _ "{" _ c:ConstructQuery_optional_triple_template() _ "}" _ g:GroupClause()? _ h:HavingClause()? _ o:OrderClause()? _ l:LimitOffsetClauses()? _ v:ValuesClause() {?
+            i("CONSTRUCT") _ d:DatasetClauses() _ i("WHERE") _ "{" _ c:ConstructQuery_optional_triple_template() _ "}" _ g:GroupClause()? _ h:HavingClause()? _ o:OrderClause()? _ l:LimitOffsetClauses()? _ v:ValuesClause() _ p:PValuesClause() {?
                 Ok(Query::Construct {
                     template: c.clone(),
                     dataset: d,
                     pattern: build_select(
                         Selection::no_op(),
                         GraphPattern::Bgp { patterns: c },
-                        g, h, o, l, v, state
+                        g, h, o, l, v, p, state
                     )?,
                     base_iri: state.base_iri.clone()
                 })
@@ -1047,14 +1053,14 @@ parser! {
         rule ConstructQuery_optional_triple_template() -> Vec<TriplePattern> = TriplesTemplate() / { Vec::new() }
 
         rule DescribeQuery() -> Query =
-            i("DESCRIBE") _ "*" _ d:DatasetClauses() w:WhereClause()? _ g:GroupClause()? _ h:HavingClause()? _ o:OrderClause()? _ l:LimitOffsetClauses()? _ v:ValuesClause() {?
+            i("DESCRIBE") _ "*" _ d:DatasetClauses() w:WhereClause()? _ g:GroupClause()? _ h:HavingClause()? _ o:OrderClause()? _ l:LimitOffsetClauses()? _ v:ValuesClause() _ p:PValuesClause() {?
                 Ok(Query::Describe {
                     dataset: d,
-                    pattern: build_select(Selection::no_op(), w.unwrap_or_default(), g, h, o, l, v, state)?,
+                    pattern: build_select(Selection::no_op(), w.unwrap_or_default(), g, h, o, l, v, p, state)?,
                     base_iri: state.base_iri.clone()
                 })
             } /
-            i("DESCRIBE") _ p:DescribeQuery_item()+ _ d:DatasetClauses() w:WhereClause()? _ g:GroupClause()? _ h:HavingClause()? _ o:OrderClause()? _ l:LimitOffsetClauses()? _ v:ValuesClause() {?
+            i("DESCRIBE") _ p:DescribeQuery_item()+ _ d:DatasetClauses() w:WhereClause()? _ g:GroupClause()? _ h:HavingClause()? _ o:OrderClause()? _ l:LimitOffsetClauses()? _ v:ValuesClause() _ pv:PValuesClause() {?
                 Ok(Query::Describe {
                     dataset: d,
                     pattern: build_select(Selection {
@@ -1063,16 +1069,16 @@ parser! {
                             NamedNodePattern::NamedNode(n) => SelectionMember::Expression(n.into(), variable()),
                             NamedNodePattern::Variable(v) => SelectionMember::Variable(v)
                         }).collect())
-                    }, w.unwrap_or_default(), g, h, o, l, v, state)?,
+                    }, w.unwrap_or_default(), g, h, o, l, v, pv, state)?,
                     base_iri: state.base_iri.clone()
                 })
             }
         rule DescribeQuery_item() -> NamedNodePattern = i:VarOrIri() _ { i }
 
-        rule AskQuery() -> Query = i("ASK") _ d:DatasetClauses() _ w:WhereClause() _ g:GroupClause()? _ h:HavingClause()? _ o:OrderClause()? _ l:LimitOffsetClauses()? _ v:ValuesClause() {?
+        rule AskQuery() -> Query = i("ASK") _ d:DatasetClauses() _ w:WhereClause() _ g:GroupClause()? _ h:HavingClause()? _ o:OrderClause()? _ l:LimitOffsetClauses()? _ v:ValuesClause() _ p:PValuesClause() {?
             Ok(Query::Ask {
                 dataset: d,
-                pattern: build_select(Selection::no_op(), w, g, h, o, l, v, state)?,
+                pattern: build_select(Selection::no_op(), w, g, h, o, l, v, p, state)?,
                 base_iri: state.base_iri.clone()
             })
         }
@@ -1159,6 +1165,14 @@ parser! {
         rule OffsetClause() -> usize = i("OFFSET") _ o:$(INTEGER()) {?
             usize::from_str(o).map_err(|_| "The query offset should be a non negative integer")
         }
+
+        rule PValuesClause() -> Option<GraphPattern> =
+            i("PVALUES") _ "(" _ vars:InlineDataFull_var()* _ ")" _ p:$(VARNAME()) {
+            Some(GraphPattern::PValues{
+                variables:vars,
+                bindings_parameter:p.to_string()
+            }) } /
+            { None }
 
         rule ValuesClause() -> Option<GraphPattern> =
             i("VALUES") _ p:DataBlock() { Some(p) } /

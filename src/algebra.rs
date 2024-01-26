@@ -558,6 +558,10 @@ pub enum GraphPattern {
         variables: Vec<Variable>,
         bindings: Vec<Vec<Option<GroundTerm>>>,
     },
+    PValues {
+        variables: Vec<Variable>,
+        bindings_parameter: String,
+    },
     /// [OrderBy](https://www.w3.org/TR/sparql11-query/#defn_algOrdered).
     OrderBy {
         inner: Box<Self>,
@@ -926,8 +930,11 @@ impl GraphPattern {
                 inner.fmt_sse(f)?;
                 write!(f, ")")
             }
-            GraphPattern::DT { dt } => {
-                write!(f, "{}", dt)
+            GraphPattern::DT { .. } => {
+                unimplemented!("Please create a query without the custom DT construction")
+            }
+            GraphPattern::PValues { .. } => {
+                unimplemented!("Please create a query without the custom PVALUES construction")
             }
         }
     }
@@ -999,7 +1006,7 @@ impl GraphPattern {
                     callback(v);
                 }
             }
-            Self::Values { variables, .. } | Self::Project { variables, .. } => {
+            Self::Values { variables, .. } | Self::Project { variables, .. } | Self::PValues {variables, ..}=> {
                 for v in variables {
                     callback(v);
                 }
