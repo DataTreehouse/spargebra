@@ -407,8 +407,8 @@ impl SyntacticSugarRemover {
                 let ret = dt_to_ret(dt, ts_tps_in_scope, context);
                 ret
             }
-            GraphPattern::PValues { bindings_parameter, variables } => {
-                RemoveSugarGraphPatternReturn::from_pattern(GraphPattern::PValues {
+            GraphPattern::Params { bindings_parameter, variables } => {
+                RemoveSugarGraphPatternReturn::from_pattern(GraphPattern::Params {
                     bindings_parameter,
                     variables
                 })
