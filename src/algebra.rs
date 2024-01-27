@@ -558,7 +558,7 @@ pub enum GraphPattern {
         variables: Vec<Variable>,
         bindings: Vec<Vec<Option<GroundTerm>>>,
     },
-    Params {
+    PValues {
         variables: Vec<Variable>,
         bindings_parameter: String,
     },
@@ -933,7 +933,7 @@ impl GraphPattern {
             GraphPattern::DT { .. } => {
                 unimplemented!("Please create a query without the custom DT construction")
             }
-            GraphPattern::Params { .. } => {
+            GraphPattern::PValues { .. } => {
                 unimplemented!("Please create a query without the custom PVALUES construction")
             }
         }
@@ -1006,7 +1006,7 @@ impl GraphPattern {
                     callback(v);
                 }
             }
-            Self::Values { variables, .. } | Self::Project { variables, .. } | Self::Params {variables, ..}=> {
+            Self::Values { variables, .. } | Self::Project { variables, .. } | Self::PValues {variables, ..}=> {
                 for v in variables {
                     callback(v);
                 }
