@@ -689,6 +689,15 @@ impl fmt::Display for GraphPattern {
                 }
                 write!(f, " }}")
             }
+            Self::PValues {
+                variables, bindings_parameter
+            } => {
+                write!(f, "VALUES ( ")?;
+                for var in variables {
+                    write!(f, "{var} ")?;
+                }
+                write!(f, ") {bindings_parameter} ")
+            }
             Self::Group {
                 inner,
                 variables,
