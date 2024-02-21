@@ -1,3 +1,6 @@
+This repository is forked from https://github.com/oxigraph/oxigraph in order to support some custom constructions.
+We recommend that you use the original library, and to support the original creator Thomas Tanon. 
+
 Spargebra
 =========
 
