@@ -692,7 +692,7 @@ impl fmt::Display for GraphPattern {
             Self::PValues {
                 variables, bindings_parameter
             } => {
-                write!(f, "VALUES ( ")?;
+                write!(f, "PVALUES ( ")?;
                 for var in variables {
                     write!(f, "{var} ")?;
                 }
